@@ -1296,8 +1296,10 @@ var __exec;
     curLoad = load;
   }
   function postExec() {
-    if (--callCounter == 0)
+    if (--callCounter == 0) {
+
       __global.System = curSystem;
+    }
     curLoad = undefined;
   }
 
@@ -2898,6 +2900,10 @@ function createEntry() {
   }
 
   function linkDynamicModule(entry, loader) {
+    //if (entry.metadata && entry.metadata.globals)// && entry.metadata.globals.hejja)
+    if (entry.metadata)// && entry.metadata.globals)// && entry.metadata.globals.hejja)
+      debugger;
+    //debugger;
     if (entry.module)
       return;
 
@@ -3642,7 +3648,10 @@ hookConstructor(function(constructor) {
         throw new TypeError('Invalid require');
     }
 
-    function define(name, deps, factory) {
+    function defineFactory(load) {
+    var define = function (name, deps, factory) {
+      //if (load)
+      //  debugger;
       if (typeof name != 'string') {
         factory = deps;
         deps = name;
@@ -3682,6 +3691,17 @@ hookConstructor(function(constructor) {
         deps.splice(moduleIndex, 1);
 
       function execute(req, exports, module) {
+        var injections = load && load.metadata && load.metadata.globals;
+        injections = injections && true && injections;  // FIXME true should correspond to meta matching.
+
+        // extends deps
+        if (injections) {
+          var mockGlobals = [];
+          for (var name in load.metadata.globlas)
+            mockGlobals.push(name);
+          deps = mockGlobals.concat(deps);
+        }
+
         var depValues = [];
         for (var i = 0; i < deps.length; i++)
           depValues.push(req(deps[i]));
@@ -3718,6 +3738,41 @@ hookConstructor(function(constructor) {
         var curRequire = __global.require;
         __global.require = require;
 
+        console.warn(depValues);  // FIXME
+
+        function isEmpty (map) {
+          for (var any in map)
+            return false;
+          return true;
+        }
+
+        if (injections && !isEmpty(injections)) { 
+          /* wrap the factory in a dependency laden factory:
+           *
+           * (function (nargs, one, two , three, &rest) {
+           *   var args = arguments,
+           *       factory = function (&rest) { ... };
+           *   return factory.apply(this, Array.prototype.slice.call(args, nargs));
+           * })(4, one, two, three);
+           */
+
+          var symbols = '',
+              bindings = '',
+              count = 1;     // nargs
+          for (var symbol in load.metadata.globals) {
+            symbols += ',' + symbol;
+            bindings += ',' + load.metadata.globals[symbol];
+            count++;
+          }
+
+          var body = ('var args = arguments,' +
+                      '    factory = ' + factory.toString() + ';' +
+                      'return factory.apply(this, Array.prototype.slice.call(args, nargs));');
+
+          factory = new Function('nargs' + symbols, body);
+        }
+
+
         var output = factory.apply(exportsIndex == -1 ? __global : exports, depValues);
 
         __global.require = curRequire;
@@ -3740,6 +3795,8 @@ hookConstructor(function(constructor) {
       });
     }
     define.amd = {};
+    return define;
+    }
 
     // reduction function to attach defines to a load record
     hook('reduceRegister_', function(reduceRegister) {
@@ -3792,7 +3849,7 @@ hookConstructor(function(constructor) {
     });
 
     // adds define as a global (potentially just temporarily)
-    function createDefine() {
+    function createDefine(load) {
       // ensure no NodeJS environment detection
       var oldModule = __global.module;
       var oldExports = __global.exports;
@@ -3800,7 +3857,7 @@ hookConstructor(function(constructor) {
 
       __global.module = undefined;
       __global.exports = undefined;
-      __global.define = define;
+      __global.define = defineFactory(load);
 
       return function() {
         __global.define = oldDefine;
@@ -3812,9 +3869,9 @@ hookConstructor(function(constructor) {
     loader.set('@@amd-helpers', loader.newModule({
       createDefine: createDefine,
       require: require,
-      define: define
+      define: defineFactory()
     }));
-    loader.amdDefine = define;
+    loader.amdDefine = defineFactory();
     loader.amdRequire = require;
   };
 });/*
@@ -3849,9 +3906,10 @@ hookConstructor(function(constructor) {
         load.metadata.format = 'amd';
         
         if (!loader.builder && loader.execute !== false) {
-          var removeDefine = this.get('@@amd-helpers').createDefine();
+          var removeDefine = this.get('@@amd-helpers').createDefine(load);
 
           try {
+            //debugger;
             __exec.call(loader, load);
           }
           finally {
@@ -4422,6 +4480,9 @@ hookConstructor(function(constructor) {
         }
       }
 
+      if (load.metadata.globals && load.metadata.globals.hejja)
+        console.log('ok');
+        //debugger;
       return translate.call(this, load);
     };
   });
