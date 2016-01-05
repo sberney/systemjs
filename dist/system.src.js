@@ -3689,7 +3689,7 @@ hookConstructor(function(constructor) {
         // extends deps
         if (injections) {
           var mockGlobals = [];
-          for (var name in load.metadata.globlas)
+          for (var name in load.metadata.globals)
             mockGlobals.push(name);
           deps = mockGlobals.concat(deps);
         }
